@@ -507,7 +507,8 @@ def history_page(state: State, chosen_type: str) -> Page:
 
 
 # ---------------------------------------------------------------------------
-# Unit tests (each route has at least one; they check the returned state)
+# Unit tests (every route and helper is tested; routes are checked through
+# the .state of the Page they return)
 # ---------------------------------------------------------------------------
 
 def blank_state() -> State:
@@ -519,52 +520,173 @@ def blank_state() -> State:
     return State(0.0, 0.0, "None yet", [], "Home")
 
 
+def sample_history() -> list[Calculation]:
+    """Make a small history list used by the tests.
+
+    Returns:
+        list[Calculation]: One percent yield and one theoretical yield.
+    """
+    return [Calculation("Percent Yield", 50.0, "a"),
+            Calculation("Theoretical Yield", 36.0, "b")]
+
+
+# is_positive_number
 assert_equal(is_positive_number("2.5"), True)
+assert_equal(is_positive_number(".5"), True)
+assert_equal(is_positive_number(" 3 "), True)
+assert_equal(is_positive_number("0"), False)
+assert_equal(is_positive_number("0.0"), False)
+assert_equal(is_positive_number(""), False)
 assert_equal(is_positive_number("-3"), False)
+assert_equal(is_positive_number("1.2.3"), False)
 assert_equal(is_positive_number("abc"), False)
+
+# all_positive_numbers
 assert_equal(all_positive_numbers(["1", "2"]), True)
 assert_equal(all_positive_numbers(["1", "x"]), False)
+assert_equal(all_positive_numbers(["0", "2"]), False)
+assert_equal(all_positive_numbers([]), True)
+
+# compute_percent_yield
 assert_equal(compute_percent_yield(5.0, 10.0), 50.0)
+assert_equal(compute_percent_yield(15.0, 10.0), 150.0)
+assert_equal(compute_percent_yield(1.0, 3.0), 33.33)
+
+# find_limiting_reactant (reactant two, reactant one, then a tie)
 assert_equal(find_limiting_reactant("H2", 4.0, 2.0, "O2", 1.0, 1.0), "O2")
 assert_equal(find_limiting_reactant("H2", 1.0, 2.0, "O2", 5.0, 1.0), "H2")
+assert_equal(find_limiting_reactant("H2", 2.0, 2.0, "O2", 1.0, 1.0), "H2")
+
+# smallest_ratio (reactant two smaller, reactant one smaller, tie, rounding)
 assert_equal(smallest_ratio(4.0, 2.0, 1.0, 1.0), 1.0)
+assert_equal(smallest_ratio(1.0, 2.0, 4.0, 1.0), 0.5)
+assert_equal(smallest_ratio(2.0, 2.0, 1.0, 1.0), 1.0)
+assert_equal(smallest_ratio(1.0, 3.0, 5.0, 1.0), 0.333)
+
+# compute_theoretical_yield (equal coefficients, 1:2 ratio, rounding)
 assert_equal(compute_theoretical_yield(4.0, 2.0, 2.0, 2.0, 18.0), 36.0)
-assert_equal(history_lines([Calculation("Percent Yield", 50.0, "x")],
-                           "Theoretical Yield"), [])
-assert_equal(history_lines([Calculation("Percent Yield", 50.0, "x")],
-                           "All"), ["Percent Yield: 50.0 (x)"])
+assert_equal(compute_theoretical_yield(4.0, 2.0, 1.0, 2.0, 18.0), 72.0)
+assert_equal(compute_theoretical_yield(10.0, 3.0, 1.0, 1.0, 1.0), 3.33)
+
+# add_calculation
+history_state = blank_state()
+add_calculation(history_state, "Percent Yield", 50.0, "a")
+assert_equal(history_state.calculations,
+             [Calculation("Percent Yield", 50.0, "a")])
+add_calculation(history_state, "Theoretical Yield", 36.0, "b")
+assert_equal(history_state.calculations, sample_history())
+
+# history_lines
+assert_equal(history_lines(sample_history(), "All"),
+             ["Percent Yield: 50.0 (a)", "Theoretical Yield: 36.0 (b)"])
+assert_equal(history_lines(sample_history(), "Theoretical Yield"),
+             ["Theoretical Yield: 36.0 (b)"])
+assert_equal(history_lines(sample_history(), "Limiting Reactant"), [])
+assert_equal(history_lines([], "All"), [])
+
+# page_buttons and nav_buttons
+assert_equal(len(page_buttons()), 5)
+assert_equal(len(nav_buttons()), 6)
+
+# error_page (state must not be changed)
+error_state = blank_state()
+assert_equal(error_page(error_state, percent_yield).state, blank_state())
+
+# history_page (state must not be changed)
+page_state = blank_state()
+page_state.calculations = sample_history()
+assert_equal(history_page(page_state, "All").state.calculations,
+             sample_history())
 
 # index
 assert_equal(index(blank_state()).state.current_page, "Home")
+
 # percent_yield
 assert_equal(percent_yield(blank_state()).state.current_page,
              "Percent Yield")
-# calculate_percent_yield
-assert_equal(calculate_percent_yield(blank_state(), "5", "10")
-             .state.calculations,
+
+# calculate_percent_yield: valid input
+percent_page = calculate_percent_yield(blank_state(), "5", "10")
+assert_equal(percent_page.state.actual_yield, 5.0)
+assert_equal(percent_page.state.theoretical_yield, 10.0)
+assert_equal(percent_page.state.calculations,
              [Calculation("Percent Yield", 50.0,
                           "5 g actual / 10 g theoretical")])
-assert_equal(calculate_percent_yield(blank_state(), "x", "10")
-             .state.calculations, [])
+# calculate_percent_yield: over 100 percent still saved
+over_page = calculate_percent_yield(blank_state(), "15", "10")
+assert_equal(over_page.state.calculations[0].result, 150.0)
+# calculate_percent_yield: letters, zero and blank are rejected
+for bad_actual, bad_theoretical in [("x", "10"), ("5", "0"), ("", "10")]:
+    bad_page = calculate_percent_yield(blank_state(), bad_actual,
+                                       bad_theoretical)
+    assert_equal(bad_page.state.calculations, [])
+    assert_equal(bad_page.state.actual_yield, 0.0)
+    assert_equal(bad_page.state.theoretical_yield, 0.0)
+
 # limiting_reactant
 assert_equal(limiting_reactant(blank_state()).state.current_page,
              "Limiting Reactant")
-# calculate_limiting_reactant
-assert_equal(calculate_limiting_reactant(blank_state(), "H2", "4", "2",
+
+# calculate_limiting_reactant: valid input
+limit_page = calculate_limiting_reactant(blank_state(), "H2", "4", "2",
                                          "O2", "1", "1")
-             .state.limiting_reactant, "O2")
+assert_equal(limit_page.state.limiting_reactant, "O2")
+assert_equal(limit_page.state.calculations,
+             [Calculation("Limiting Reactant", 1.0,
+                          "limiting reactant is O2; smallest "
+                          "moles/coefficient ratio shown as result")])
+# calculate_limiting_reactant: names are trimmed
+trim_page = calculate_limiting_reactant(blank_state(), " H2 ", "1", "2",
+                                        "O2", "5", "1")
+assert_equal(trim_page.state.limiting_reactant, "H2")
+# calculate_limiting_reactant: bad number or blank name is rejected
+for bad_inputs in [("H2", "abc", "2", "O2", "1", "1"),
+                   ("H2", "4", "0", "O2", "1", "1"),
+                   ("", "4", "2", "O2", "1", "1"),
+                   ("H2", "4", "2", "  ", "1", "1")]:
+    bad_limit = calculate_limiting_reactant(blank_state(), bad_inputs[0],
+                                            bad_inputs[1], bad_inputs[2],
+                                            bad_inputs[3], bad_inputs[4],
+                                            bad_inputs[5])
+    assert_equal(bad_limit.state.calculations, [])
+    assert_equal(bad_limit.state.limiting_reactant, "None yet")
+
 # theoretical_yield
 assert_equal(theoretical_yield(blank_state()).state.current_page,
              "Theoretical Yield")
-# calculate_theoretical_yield
-assert_equal(calculate_theoretical_yield(blank_state(), "4", "2", "2", "2",
-                                         "18").state.theoretical_yield, 36.0)
+
+# calculate_theoretical_yield: valid input
+theory_page = calculate_theoretical_yield(blank_state(), "4", "2", "2", "2",
+                                          "18")
+assert_equal(theory_page.state.theoretical_yield, 36.0)
+assert_equal(theory_page.state.calculations,
+             [Calculation("Theoretical Yield", 36.0,
+                          "4 g of None yet used as the limiting reactant")])
+# calculate_theoretical_yield: uses the limiting reactant already found
+named_state = blank_state()
+named_state.limiting_reactant = "O2"
+named_page = calculate_theoretical_yield(named_state, "4", "2", "2", "2",
+                                         "18")
+assert_equal(named_page.state.calculations[0].description,
+             "4 g of O2 used as the limiting reactant")
+# calculate_theoretical_yield: letters and zero are rejected
+for bad_mass, bad_molar in [("x", "2"), ("4", "0"), ("", "2")]:
+    bad_theory = calculate_theoretical_yield(blank_state(), bad_mass,
+                                             bad_molar, "2", "2", "18")
+    assert_equal(bad_theory.state.calculations, [])
+    assert_equal(bad_theory.state.theoretical_yield, 0.0)
+
 # formula_reference
 assert_equal(formula_reference(blank_state()).state.current_page, "Formulas")
+
 # history
 assert_equal(history(blank_state()).state.current_page, "History")
-# filter_history
-assert_equal(filter_history(blank_state(), "Percent Yield")
-             .state.calculations, [])
+
+# filter_history: history is kept, whatever filter is chosen
+filter_state = blank_state()
+filter_state.calculations = sample_history()
+assert_equal(filter_history(filter_state, "Percent Yield")
+             .state.calculations, sample_history())
+assert_equal(filter_history(blank_state(), "All").state.calculations, [])
 
 start_server(blank_state())
