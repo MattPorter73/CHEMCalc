@@ -687,12 +687,14 @@ assert_equal(filter_history(filter_state, "Percent Yield")
              .state.calculations, sample_history())
 assert_equal(filter_history(blank_state(), "All").state.calculations, [])
 
-set_website_title("CHEMCalc")
+set_website_title("Corgi Cafe")
 set_site_information(
-    author="Matthew Porter",
-    description="A study helper for stoichiometry.",
+    author="Your Name",
+    description="Order snacks for very good dogs.",
+    sources="Use of Claude and ChatGPT documented in repository",
+    planning=["see repository"],
+    links=["https://mattporter73.github.io/CHEMCalc/"]
 )
 hide_debug_information()
 set_website_framed(False)
-
 start_server(blank_state())
