@@ -496,14 +496,12 @@ def history_page(state: State, chosen_type: str) -> Page:
     """
     lines = history_lines(state.calculations, chosen_type)
     if len(lines) == 0:
-        body = ["No calculations to show yet."]
-    else:
-        body = [BulletedList(lines)]
+        lines = ["No calculations to show yet."]
     return Page(state, [
         Header("Calculation History"),
         "Show:", SelectBox("chosen_type", HISTORY_FILTERS, chosen_type),
-        Button("Filter", filter_history), LineBreak()]
-        + body + [LineBreak()] + nav_buttons())
+        Button("Filter", filter_history), LineBreak(),
+        BulletedList(lines), LineBreak()] + nav_buttons())
 
 
 # ---------------------------------------------------------------------------
